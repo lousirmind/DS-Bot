@@ -2,7 +2,7 @@ import { createElement as h, Fragment, useEffect, useLayoutEffect, useMemo, useR
 import { createPortal } from 'react-dom'
 import { MarkdownText } from './dsh-primitives.js'
 import { inkText } from './inks.js'
-import { linkMentions, mentionTarget, dayLabel, contentText, stripHeader, isHiddenTurn, isRelayContext, relaysBefore, relayPart, commRunOf, toolName, toolArgs, reminderPrompts, elapsedLabel, clockLabel, messageClock } from './text.js'
+import { linkMentions, mentionTarget, dayLabel, contentText, stripHeader, isHiddenTurn, isRelayContext, relaysBefore, relayPart, commRunOf, toolName, toolArgs, reminderPrompts, elapsedLabel, clockLabel, messageClock, formatSmartTime, formatFullTime } from './text.js'
 import { SmileIcon, ReplyIcon, DotsIcon, CheckIcon, DownloadIcon, CopyIcon, MemoryIcon } from './icons.js'
 import { colorOf, toolState, BotMark, RoomAvatar } from './mark.js'
 import { SettledQuestion, PendingQuestion } from './questions.js'
@@ -20,7 +20,7 @@ import { BtwCardView } from './btw.js'
 import { partIndexOf, withBtwRows } from './btw-model.js'
 import { layoutOf, thinkingShown } from './themes.js'
 
-export { clockLabel }
+export { clockLabel, formatSmartTime, formatFullTime }
 
 // -------------------------------------------------------------------------
 // Chat cells
@@ -31,7 +31,7 @@ const mdLabels = () => ({ code: { copyLabel: t('Copy'), copiedLabel: t('Copied')
 // row, so it lines up with the bubble whether or not reactions hang below it.
 // `fold`: past what a bubble folds (fold.js); `whole`: the last text is only the start
 // of its message (see useFold).
-export function Bubbles({ texts, roster, selfId, actions, streaming, sessionId, msgKey, useUi, lead, mentions, fold = FOLD_AT, whole }) {
+export function Bubbles({ texts, roster, selfId, actions, streaming, sessionId, msgKey, useUi, lead, mentions, fold = FOLD_AT, whole, time }) {
   const onClick = (event) => {
     const target = mentionTarget(event)
     if (target === null) return
@@ -49,11 +49,12 @@ export function Bubbles({ texts, roster, selfId, actions, streaming, sessionId, 
         live: streaming && last,
         lead: lead && last ? lead : null,
         whole: last ? whole : undefined,
+        time: last ? time : undefined,
       })
     }))
 }
 
-function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, mentions, fold, picked, live, lead, whole }) {
+function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, mentions, fold, picked, live, lead, whole, time }) {
   const { shown, folded, control } = useFold(text, { limit: fold, whole, live })
   const key = msgKey ? `${msgKey}:${index}` : undefined
   const body = h(MarkdownText, { text: linkMentions(shown, roster.bots, selfId), streaming: live, labels: mdLabels(), variant: 'compact', fileMentions: mentions })
@@ -69,13 +70,14 @@ function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, menti
   return h('div', { ref: row, className: 'bt-msg', onClick: tapTools },
     h('div', { className: 'bt-msg-line' },
       lead,
-      h('div', { className: 'bt-bubble', 'data-folded': folded || undefined },
+      h('div', { className: 'bt-bubble', title: formatFullTime(time), 'data-folded': folded || undefined },
         control ? h('div', { className: 'bt-fold-body' }, body) : body,
         control),
       live ? null : h(MessageTools, { text: folded ? text : shown, name: roster.byId[selfId]?.name ?? t('Bot'), sessionId, react: key ? emoji => actions.toggleReaction(msgKey, index, emoji) : undefined, actions, open: toolsOpen })),
     picked.length ? h('div', { className: 'bt-reacts' }, picked.map(emoji => h('button', {
       key: emoji, type: 'button', className: 'bt-react', 'aria-label': t('Remove reaction {emoji}', { emoji }), onClick: () => actions.toggleReaction(msgKey, index, emoji),
-    }, emoji))) : null)
+    }, emoji))) : null,
+    time ? h('div', { className: 'bt-btime', title: formatFullTime(time) }, formatSmartTime(time)) : null)
 }
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏']
@@ -266,7 +268,12 @@ export function AssistantCell({ node, groupPart, sessionId, openFile, fileMentio
       // time makes one Elapsed show settled + running.
       ...(thinking !== undefined ? { at: typeof thinking.time === 'number' ? thinking.time - (ms ?? 0) : undefined } : { ms }),
     }) : null,
-    texts.length ? h(Bubbles, { texts, roster, selfId, actions, streaming: running, sessionId, msgKey: `${sessionId}:${data.turn}:${node.key ?? data.seq ?? ''}`, useUi, mentions, fold: FOLD_HUGE }) : null)
+    texts.length ? h(Bubbles, {
+      texts, roster, selfId, actions, streaming: running, sessionId,
+      msgKey: `${sessionId}:${data.turn}:${node.key ?? data.seq ?? ''}`,
+      useUi, mentions, fold: FOLD_HUGE,
+      time: Number.isFinite(data.time) ? data.time : (Number.isFinite(data.finalNode?.time) ? data.finalNode.time : (Number.isFinite(node.time) ? node.time : (running ? Date.now() : undefined))),
+    }) : null)
 }
 
 function EventLine({ prefix, bots, joiner = t('and'), onOpen, whole = false }) {
@@ -410,10 +417,14 @@ const scrollParent = (node) => {
 function EarlierUser({ row }) {
   const { shown, folded, control } = useFold(row.text ?? '')
   const body = row.text ? h(MarkdownText, { text: shown, labels: mdLabels(), variant: 'compact' }) : null
-  return h('div', { className: 'bt-urow' }, h('div', { className: 'bt-ububble', 'data-folded': folded || undefined },
-    control ? h('div', { className: 'bt-fold-body' }, body) : body,
-    control,
-    row.images ? h('span', { className: 'bt-uimages' }, row.images === 1 ? t('1 image') : t('{count} images', { count: row.images })) : null))
+  const time = Number.isFinite(row.time) ? row.time : undefined
+  return h('div', { className: 'bt-urow' },
+    h('div', { className: 'bt-ustack' },
+      h('div', { className: 'bt-ububble', title: formatFullTime(time), 'data-folded': folded || undefined },
+        control ? h('div', { className: 'bt-fold-body' }, body) : body,
+        control,
+        row.images ? h('span', { className: 'bt-uimages' }, row.images === 1 ? t('1 image') : t('{count} images', { count: row.images })) : null),
+      time ? h('div', { className: 'bt-utime', title: formatFullTime(time) }, formatSmartTime(time)) : null))
 }
 
 // The earlier parts of a Bot's own chat, above its current part as one conversation.
@@ -530,7 +541,7 @@ function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDel
     // A display-only view replays from the blueprint the host kept on the call.
     case 'view': return h(WidgetCell, { key, sessionId, callId: row.callId, args: { text: name => name === 'title' ? row.title : undefined, value: name => name === 'view' ? row.view : undefined }, done: true, isError: false, roster, actions })
     case 'bot': {
-      const bubbles = h(Bubbles, { key, texts: row.texts, roster, selfId, actions, sessionId: useUi ? sessionId : undefined, msgKey: useUi ? `${sessionId}:${row.time}` : undefined, useUi, fold: FOLD_HUGE })
+      const bubbles = h(Bubbles, { key, texts: row.texts, roster, selfId, actions, sessionId: useUi ? sessionId : undefined, msgKey: useUi ? `${sessionId}:${row.time}` : undefined, useUi, fold: FOLD_HUGE, time: row.time })
       const speaker = layoutOf(roster.prefs) === 'flat' ? roster.byId[selfId] : undefined
       return speaker ? h(Fragment, { key }, h(SpeakerHead, { bot: speaker, time: row.time }), bubbles) : bubbles
     }

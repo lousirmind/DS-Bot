@@ -5,7 +5,7 @@ import { BotMark } from './mark.js'
 import { CheckIcon, CopyIcon } from './icons.js'
 import { dateLocale, t } from './i18n.js'
 import { noHover } from './motion.js'
-import { clockLabel, messageClock } from './text.js'
+import { clockLabel, messageClock, formatSmartTime, formatFullTime } from './text.js'
 import { useFold } from './fold.js'
 
 // -------------------------------------------------------------------------
@@ -90,7 +90,7 @@ export function UserMessageCell({ node, sessionId, useRoster, actions, renderMes
   const referenceLabels = data.referenceLabels ?? []
   const references = openFile && openSkill ? { openFile, openSkill } : undefined
   const steering = node.kind === 'steering'
-  const groupTime = roster.roomsById?.[sessionId] && Number.isFinite(data.time) ? messageClock(data.time) : undefined
+  const msgTime = Number.isFinite(data.time) ? data.time : undefined
   const { shown, folded, control } = useFold(text, { markdown: false })
   const body = h(UserText, { text: shown, bots: mentionableBots(roster, sessionId), referenceLabels, skillNames: data.skillNames ?? [], references, actions })
   const row = useRef(null)
@@ -110,12 +110,12 @@ export function UserMessageCell({ node, sessionId, useRoster, actions, renderMes
   return h('div', { ref: row, className: 'bt-umsg', 'data-steering': steering || undefined },
     h('div', { className: 'bt-ustack' },
       attachments.length > 0 ? h(Attachments, { attachments, renderMessageImages }) : null,
-      text !== '' || rest.length > 0 ? h('div', { className: 'bt-ubody', title: clock(data.time), 'data-folded': folded || undefined, onClick: tapTools },
+      text !== '' || rest.length > 0 ? h('div', { className: 'bt-ubody', title: formatFullTime(data.time) || clock(data.time), 'data-folded': folded || undefined, onClick: tapTools },
         control ? h('div', { className: 'bt-fold-body' }, body) : body,
         control,
         rest.map((block, index) => (ui.JsonBlock ? h(ui.JsonBlock, { key: index, label: t('Content'), payload: block }) : null))) : null,
       referenceLabels.length > 0 ? h('div', { className: 'bt-urefs' }, t('Referenced {labels}', { labels: referenceLabels.join(t(', ')) })) : null,
-      groupTime ? h('div', { className: 'bt-utime', title: clockLabel(data.time) }, groupTime) : null),
+      msgTime ? h('div', { className: 'bt-utime', title: formatFullTime(msgTime) }, formatSmartTime(msgTime)) : null),
     text === '' ? null : h('div', { className: 'bt-utools', 'data-open': toolsOpen || undefined }, h(CopyButton, { text })))
 }
 
@@ -134,6 +134,7 @@ export const USER_MESSAGE_CSS = `
 .bt-ufile-name{font-size:14px;line-height:22px;font-weight:500;color:var(--bt-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bt-ufile-meta{font-size:12px;line-height:15px;color:var(--bt-ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bt-urefs{font-size:13px;line-height:18px;color:var(--bt-ink-3)}
+.bt-utime{margin-top:-4px;font-size:11px;line-height:14px;color:var(--bt-ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
 .bt-utools{display:flex;flex:none;gap:2px;opacity:0;visibility:hidden;transition:opacity .12s ease,visibility .12s}
 .bt-umsg:hover .bt-utools,.bt-umsg:focus-within .bt-utools{opacity:1;visibility:visible}
 `

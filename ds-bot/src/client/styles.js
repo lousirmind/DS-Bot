@@ -196,6 +196,9 @@ body{--bt-msg-w:.8;--bt-flat-w:1}
 button.bt-lead{border:0;background:none;padding:0;cursor:pointer}
 /* Rows without the avatar start where the bubble beside it starts: 22px avatar + 8px gap. */
 .bt-astack[data-lead]>.bt-msg:not(:last-child)>.bt-msg-line,.bt-astack[data-lead] .bt-reacts{margin-left:30px}
+.bt-btime{margin-top:2px;font-size:11px;line-height:14px;color:var(--bt-ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bt-astack[data-lead] .bt-btime{margin-left:30px}
+body[data-bt-layout=flat] .bt-btime{display:none}
 .bt-group-name{font-size:12px;line-height:16px;font-weight:500;margin-left:42px}
 .bt-group-name:has(>.bt-lead){display:flex;align-items:center;margin:0 0 2px;font-size:13px;line-height:22px;font-weight:600;color:var(--bt-ink)}
 .bt-group-name>.bt-lead{margin:0 8px 0 0}

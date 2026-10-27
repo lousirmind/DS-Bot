@@ -53,6 +53,28 @@ export function messageClock(time, now = Date.now()) {
   return daysBefore(new Date(time), now) === 0 ? clock(time) : clockLabel(time, now)
 }
 
+// Full timestamp for hover tooltips: "YYYY-MM-DD HH:mm:ss".
+export function formatFullTime(time) {
+  if (!Number.isFinite(time)) return undefined
+  const d = new Date(time)
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+// Smart concise timestamp: today "HH:mm", earlier this year "MM-DD HH:mm", cross-year "YYYY-MM-DD HH:mm".
+export function formatSmartTime(time, now = Date.now()) {
+  if (!Number.isFinite(time)) return ''
+  const date = new Date(time)
+  const pad = n => String(n).padStart(2, '0')
+  const timeStr = `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  const days = daysBefore(date, now)
+  if (days === 0) return timeStr
+  const monthStr = `${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+  const sameYear = date.getFullYear() === new Date(now).getFullYear()
+  if (sameYear) return `${monthStr} ${timeStr}`
+  return `${date.getFullYear()}-${monthStr} ${timeStr}`
+}
+
 // A short relative stamp for list rows: "just now", "5 min", "3 h", "2 d", then a date.
 export function relativeShort(ms) {
   const diff = Math.max(0, Date.now() - ms)

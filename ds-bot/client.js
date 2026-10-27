@@ -1950,6 +1950,24 @@ function clockLabel(time, now = Date.now()) {
 function messageClock(time, now = Date.now()) {
   return daysBefore(new Date(time), now) === 0 ? clock(time) : clockLabel(time, now);
 }
+function formatFullTime(time) {
+  if (!Number.isFinite(time)) return void 0;
+  const d = new Date(time);
+  const pad2 = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+}
+function formatSmartTime(time, now = Date.now()) {
+  if (!Number.isFinite(time)) return "";
+  const date = new Date(time);
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const timeStr = `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  const days = daysBefore(date, now);
+  if (days === 0) return timeStr;
+  const monthStr = `${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  if (sameYear) return `${monthStr} ${timeStr}`;
+  return `${date.getFullYear()}-${monthStr} ${timeStr}`;
+}
 function relativeShort(ms) {
   const diff = Math.max(0, Date.now() - ms);
   if (diff < 6e4) return t("just now");
@@ -2547,6 +2565,9 @@ body{--bt-msg-w:.8;--bt-flat-w:1}
 button.bt-lead{border:0;background:none;padding:0;cursor:pointer}
 /* Rows without the avatar start where the bubble beside it starts: 22px avatar + 8px gap. */
 .bt-astack[data-lead]>.bt-msg:not(:last-child)>.bt-msg-line,.bt-astack[data-lead] .bt-reacts{margin-left:30px}
+.bt-btime{margin-top:2px;font-size:11px;line-height:14px;color:var(--bt-ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.bt-astack[data-lead] .bt-btime{margin-left:30px}
+body[data-bt-layout=flat] .bt-btime{display:none}
 .bt-group-name{font-size:12px;line-height:16px;font-weight:500;margin-left:42px}
 .bt-group-name:has(>.bt-lead){display:flex;align-items:center;margin:0 0 2px;font-size:13px;line-height:22px;font-weight:600;color:var(--bt-ink)}
 .bt-group-name>.bt-lead{margin:0 8px 0 0}
@@ -7249,7 +7270,7 @@ function BtwTurnTail({ turn, sessionId, useRoster, actions }) {
 var import_react13 = require("react");
 var import_react_dom = require("react-dom");
 var mdLabels3 = () => ({ code: { copyLabel: t("Copy"), copiedLabel: t("Copied") }, footnotes: t("Footnotes") });
-function Bubbles({ texts: texts2, roster, selfId, actions, streaming, sessionId, msgKey, useUi, lead, mentions, fold = FOLD_AT, whole }) {
+function Bubbles({ texts: texts2, roster, selfId, actions, streaming, sessionId, msgKey, useUi, lead, mentions, fold = FOLD_AT, whole, time }) {
   const onClick = (event) => {
     const target = mentionTarget(event);
     if (target === null) return;
@@ -7277,12 +7298,13 @@ function Bubbles({ texts: texts2, roster, selfId, actions, streaming, sessionId,
         picked: msgKey ? reactions?.[index] ?? [] : [],
         live: streaming && last,
         lead: lead && last ? lead : null,
-        whole: last ? whole : void 0
+        whole: last ? whole : void 0,
+        time: last ? time : void 0
       });
     })
   );
 }
-function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, mentions, fold, picked, live, lead, whole }) {
+function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, mentions, fold, picked, live, lead, whole, time }) {
   const { shown, folded, control } = useFold(text, { limit: fold, whole, live });
   const key = msgKey ? `${msgKey}:${index}` : void 0;
   const body = (0, import_react13.createElement)(import_dsh_client_ui_primitives.MarkdownText, { text: linkMentions(shown, roster.bots, selfId), streaming: live, labels: mdLabels3(), variant: "compact", fileMentions: mentions });
@@ -7302,7 +7324,7 @@ function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, menti
       lead,
       (0, import_react13.createElement)(
         "div",
-        { className: "bt-bubble", "data-folded": folded || void 0 },
+        { className: "bt-bubble", title: formatFullTime(time), "data-folded": folded || void 0 },
         control ? (0, import_react13.createElement)("div", { className: "bt-fold-body" }, body) : body,
         control
       ),
@@ -7314,7 +7336,8 @@ function Bubble({ text, index, roster, selfId, actions, sessionId, msgKey, menti
       className: "bt-react",
       "aria-label": t("Remove reaction {emoji}", { emoji }),
       onClick: () => actions.toggleReaction(msgKey, index, emoji)
-    }, emoji))) : null
+    }, emoji))) : null,
+    time ? (0, import_react13.createElement)("div", { className: "bt-btime", title: formatFullTime(time) }, formatSmartTime(time)) : null
   );
 }
 var REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
@@ -7522,7 +7545,19 @@ function AssistantCell({ node, groupPart, sessionId, openFile, fileMentions, use
       // time makes one Elapsed show settled + running.
       ...thinking !== void 0 ? { at: typeof thinking.time === "number" ? thinking.time - (ms ?? 0) : void 0 } : { ms }
     }) : null,
-    texts2.length ? (0, import_react13.createElement)(Bubbles, { texts: texts2, roster, selfId, actions, streaming: running, sessionId, msgKey: `${sessionId}:${data.turn}:${node.key ?? data.seq ?? ""}`, useUi, mentions, fold: FOLD_HUGE }) : null
+    texts2.length ? (0, import_react13.createElement)(Bubbles, {
+      texts: texts2,
+      roster,
+      selfId,
+      actions,
+      streaming: running,
+      sessionId,
+      msgKey: `${sessionId}:${data.turn}:${node.key ?? data.seq ?? ""}`,
+      useUi,
+      mentions,
+      fold: FOLD_HUGE,
+      time: Number.isFinite(data.time) ? data.time : Number.isFinite(data.finalNode?.time) ? data.finalNode.time : Number.isFinite(node.time) ? node.time : running ? Date.now() : void 0
+    }) : null
   );
 }
 function EventLine({ prefix, bots, joiner = t("and"), onOpen, whole = false }) {
@@ -7670,13 +7705,23 @@ var scrollParent = (node) => {
 function EarlierUser({ row }) {
   const { shown, folded, control } = useFold(row.text ?? "");
   const body = row.text ? (0, import_react13.createElement)(import_dsh_client_ui_primitives.MarkdownText, { text: shown, labels: mdLabels3(), variant: "compact" }) : null;
-  return (0, import_react13.createElement)("div", { className: "bt-urow" }, (0, import_react13.createElement)(
+  const time = Number.isFinite(row.time) ? row.time : void 0;
+  return (0, import_react13.createElement)(
     "div",
-    { className: "bt-ububble", "data-folded": folded || void 0 },
-    control ? (0, import_react13.createElement)("div", { className: "bt-fold-body" }, body) : body,
-    control,
-    row.images ? (0, import_react13.createElement)("span", { className: "bt-uimages" }, row.images === 1 ? t("1 image") : t("{count} images", { count: row.images })) : null
-  ));
+    { className: "bt-urow" },
+    (0, import_react13.createElement)(
+      "div",
+      { className: "bt-ustack" },
+      (0, import_react13.createElement)(
+        "div",
+        { className: "bt-ububble", title: formatFullTime(time), "data-folded": folded || void 0 },
+        control ? (0, import_react13.createElement)("div", { className: "bt-fold-body" }, body) : body,
+        control,
+        row.images ? (0, import_react13.createElement)("span", { className: "bt-uimages" }, row.images === 1 ? t("1 image") : t("{count} images", { count: row.images })) : null
+      ),
+      time ? (0, import_react13.createElement)("div", { className: "bt-utime", title: formatFullTime(time) }, formatSmartTime(time)) : null
+    )
+  );
 }
 function EarlierParts({ sessionId, roster, actions }) {
   const [view, setView] = (0, import_react13.useState)({ pages: [], cursor: void 0, loading: true, failed: false, startedAt: null });
@@ -7787,7 +7832,7 @@ function chatRow(row, key, { sessionId, selfId, roster, actions, useUi, onBtwDel
     case "view":
       return (0, import_react13.createElement)(WidgetCell, { key, sessionId, callId: row.callId, args: { text: (name) => name === "title" ? row.title : void 0, value: (name) => name === "view" ? row.view : void 0 }, done: true, isError: false, roster, actions });
     case "bot": {
-      const bubbles = (0, import_react13.createElement)(Bubbles, { key, texts: row.texts, roster, selfId, actions, sessionId: useUi ? sessionId : void 0, msgKey: useUi ? `${sessionId}:${row.time}` : void 0, useUi, fold: FOLD_HUGE });
+      const bubbles = (0, import_react13.createElement)(Bubbles, { key, texts: row.texts, roster, selfId, actions, sessionId: useUi ? sessionId : void 0, msgKey: useUi ? `${sessionId}:${row.time}` : void 0, useUi, fold: FOLD_HUGE, time: row.time });
       const speaker = layoutOf(roster.prefs) === "flat" ? roster.byId[selfId] : void 0;
       return speaker ? (0, import_react13.createElement)(import_react13.Fragment, { key }, (0, import_react13.createElement)(SpeakerHead, { bot: speaker, time: row.time }), bubbles) : bubbles;
     }
@@ -19056,7 +19101,7 @@ function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageIma
   const referenceLabels = data.referenceLabels ?? [];
   const references = openFile && openSkill ? { openFile, openSkill } : void 0;
   const steering = node.kind === "steering";
-  const groupTime = roster.roomsById?.[sessionId] && Number.isFinite(data.time) ? messageClock(data.time) : void 0;
+  const msgTime = Number.isFinite(data.time) ? data.time : void 0;
   const { shown, folded, control } = useFold(text, { markdown: false });
   const body = (0, import_react46.createElement)(UserText, { text: shown, bots: mentionableBots(roster, sessionId), referenceLabels, skillNames: data.skillNames ?? [], references, actions });
   const row = (0, import_react46.useRef)(null);
@@ -19086,13 +19131,13 @@ function UserMessageCell({ node, sessionId, useRoster, actions, renderMessageIma
       attachments.length > 0 ? (0, import_react46.createElement)(Attachments, { attachments, renderMessageImages }) : null,
       text !== "" || rest.length > 0 ? (0, import_react46.createElement)(
         "div",
-        { className: "bt-ubody", title: clock3(data.time), "data-folded": folded || void 0, onClick: tapTools },
+        { className: "bt-ubody", title: formatFullTime(data.time) || clock3(data.time), "data-folded": folded || void 0, onClick: tapTools },
         control ? (0, import_react46.createElement)("div", { className: "bt-fold-body" }, body) : body,
         control,
         rest.map((block, index) => ui.JsonBlock ? (0, import_react46.createElement)(ui.JsonBlock, { key: index, label: t("Content"), payload: block }) : null)
       ) : null,
       referenceLabels.length > 0 ? (0, import_react46.createElement)("div", { className: "bt-urefs" }, t("Referenced {labels}", { labels: referenceLabels.join(t(", ")) })) : null,
-      groupTime ? (0, import_react46.createElement)("div", { className: "bt-utime", title: clockLabel(data.time) }, groupTime) : null
+      msgTime ? (0, import_react46.createElement)("div", { className: "bt-utime", title: formatFullTime(msgTime) }, formatSmartTime(msgTime)) : null
     ),
     text === "" ? null : (0, import_react46.createElement)("div", { className: "bt-utools", "data-open": toolsOpen || void 0 }, (0, import_react46.createElement)(CopyButton, { text }))
   );
@@ -19112,6 +19157,7 @@ var USER_MESSAGE_CSS = `
 .bt-ufile-name{font-size:14px;line-height:22px;font-weight:500;color:var(--bt-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bt-ufile-meta{font-size:12px;line-height:15px;color:var(--bt-ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bt-urefs{font-size:13px;line-height:18px;color:var(--bt-ink-3)}
+.bt-utime{margin-top:-4px;font-size:11px;line-height:14px;color:var(--bt-ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
 .bt-utools{display:flex;flex:none;gap:2px;opacity:0;visibility:hidden;transition:opacity .12s ease,visibility .12s}
 .bt-umsg:hover .bt-utools,.bt-umsg:focus-within .bt-utools{opacity:1;visibility:visible}
 `;
