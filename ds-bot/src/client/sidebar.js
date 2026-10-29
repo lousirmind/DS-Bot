@@ -8,6 +8,7 @@ import { MAIN_LOOK } from './characters.js'
 import { botState, BotMark, BotAvatar, RoomAvatar } from './mark.js'
 import { reducedMotion } from './activity-row.js'
 import { Shimmer, workPhrase } from './cells.js'
+import { WebPageIcon } from './web-icons.js'
 import { springEasing, SPRING_SHAPE, useViewport, viewBottom } from './motion.js'
 import { hostText, t } from './i18n.js'
 import { showsDshRow } from './dsh-offer.js'
@@ -94,6 +95,20 @@ function BotRow({ bot, roster, actions, useSessions, useSessionStatus, useSessio
         : waitsFor ? h('span', { className: 'bt-row-preview' }, waitsFor)
           : preview ? h('span', { className: 'bt-row-preview' }, preview) : null) : null,
   wide && unread && !active ? h('span', { className: 'bt-unread', 'aria-hidden': true }) : null)
+}
+
+// The fixed entry above the Bot list: the DeepSeek web page in the main area. It
+// is not part of the team, so it takes no part in sorting, grouping or pinning.
+function WebPageRow({ actions, useWeb, wide }) {
+  const open = useWeb(value => value?.open === true)
+  const label = t('DeepSeek Web')
+  return h('button', {
+    type: 'button', className: 'bt-row', 'data-web-page': '', 'aria-label': label, 'aria-current': open ? 'page' : undefined,
+    title: wide ? undefined : label, onClick: () => actions.openWebPage(),
+  },
+  h(WebPageIcon, { size: 36 }),
+  wide ? h('span', { className: 'bt-row-body' },
+    h('span', { className: 'bt-row-name' }, h('span', { className: 'bt-row-title' }, label))) : null)
 }
 
 function RoomRow({ room, roster, actions, useSessions, useSessionStatus, useSessionRetainInfo, useWork, wide, marked }) {
@@ -249,7 +264,7 @@ function useListGlide(listRef, layout, key) {
 }
 
 export function TeamSidebar(props) {
-  const { wide, expandSidebar, useRoster, useUi, useSessions, actions } = props
+  const { wide, expandSidebar, useRoster, useUi, useSessions, useWeb, actions } = props
   const listRef = useRef(null)
   const closing = useRef(false)
   useLayoutEffect(() => { closing.current = false })
@@ -286,12 +301,14 @@ export function TeamSidebar(props) {
     }
     return result
   }
+  // Any row is a way back to a conversation, so it leaves the web page first.
+  const leavePage = (go, id) => { actions.closeWebPage?.(); return go(id) }
   const rowActions = {
     ...actions,
-    openSession: id => navigate(actions.openSession, id),
-    openAgent: id => navigate(actions.openAgent, id),
-    openAgentSession: id => navigate(actions.openAgentSession, id),
-    newAgentSession: id => navigate(actions.newAgentSession, id),
+    openSession: id => leavePage(id => navigate(actions.openSession, id), id),
+    openAgent: id => leavePage(id => navigate(actions.openAgent, id), id),
+    openAgentSession: id => leavePage(id => navigate(actions.openAgentSession, id), id),
+    newAgentSession: id => leavePage(id => navigate(actions.newAgentSession, id), id),
   }
   const rowProps = { roster, actions: rowActions, useSessions, useUi, useSessionStatus: props.useSessionStatus, useSessionRetainInfo: props.useSessionRetainInfo, useActivity: props.useActivity, useWork: props.useWork, wide }
   // Typing while the sidebar has focus starts a search.
@@ -313,6 +330,7 @@ export function TeamSidebar(props) {
           h('button', { type: 'button', className: 'bt-round', 'aria-label': t('New…'), title: t('New…'), onClick: () => actions.openNewChat('new') }, h(PlusIcon))),
     wide && roster.readOnly ? h('div', { className: 'bt-hint bt-read-only', role: 'status' }, hostText(roster.readOnly)) : null,
     h('div', { ref: listRef, className: 'bt-list', role: 'region', 'aria-label': t('Bot list') },
+      actions.openWebPage ? h(WebPageRow, { actions, useWeb, wide }) : null,
       main ? h(BotRow, { ...rowProps, bot: main, marked: markedUnread[main.id] === true }) : roster.ready ? null : h('div', { className: 'bt-hint' }, t('Setting up your Main Bot…')),
       order.map(entry => (entry.kind === 'bot'
         ? h(BotRow, { key: entry.item.id, ...rowProps, bot: entry.item, marked: markedUnread[entry.item.id] === true })

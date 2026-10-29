@@ -5,7 +5,7 @@ import { BotMark } from './mark.js'
 import { CheckIcon, CopyIcon } from './icons.js'
 import { dateLocale, t } from './i18n.js'
 import { noHover } from './motion.js'
-import { clockLabel, messageClock, formatSmartTime, formatFullTime } from './text.js'
+import { formatSmartTime, formatFullTime } from './text.js'
 import { useFold } from './fold.js'
 
 // -------------------------------------------------------------------------

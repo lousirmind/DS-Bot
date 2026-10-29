@@ -766,6 +766,8 @@ const ZH = {
   "Memory updated. Open {name}'s memory": '记忆已更新，打开 {name} 的记忆',
 
   // Browser
+  'DeepSeek Web': 'DeepSeek 网页',
+  'Open in system browser': '在系统浏览器打开',
   'Close browser': '关闭浏览器',
   'Open browser': '打开浏览器',
   "{name}'s browser": '{name} 的浏览器',

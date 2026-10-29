@@ -22,6 +22,8 @@ import { installHeaderNavigation } from './header-navigation.js'
 import { AssistantCell, TriggerCell, TurnProcessCell, Nothing, TurnTailCell, ToolCell } from './cells.js'
 import { Overlays } from './overlays.js'
 import { createBotBrowsers, serveBrowserReads } from './bot-browsers.js'
+import { createWebPage, WEB_SUBJECT } from './web-page.js'
+import { WEB_PAGE_CSS, WebPageDock } from './web-page-pane.js'
 import { BROWSER_CSS } from './browser-pane.js'
 import { SECRET_CSS, SecretDock } from './secret-card.js'
 import { MODEL_CSS, ModelChoiceDock, DeepSeekSignIn } from './model-menu.js'
@@ -58,6 +60,9 @@ export function apply(ctx) {
   // `details` is the panel's subject (a Session id); `view` picks details or the
   // subject Bot's browser inside it.
   const ui = createSource({ details: null, view: 'details', renaming: false, tab: null, side: null, newChat: null, exchange: null, menu: null, voice: null, palette: null, quote: null, settings: null, memory: null, toast: null, signIn: null, renameAgent: null, unread: unreadStore.read(), reactions: reactionStore.read(), visits: {} })
+  // The fixed DeepSeek web page in the main area. Only its open state lives here:
+  // the page itself is a browser-layer guest, so it survives a trip to a chat.
+  const webUi = createSource({ open: false })
   // Bot mode paints the whole team surface; Agent mode withdraws every slot and
   // style so the shell's own interface returns. `plain` stays false until a Bot-mode
   // view hosts a plain session, which drops only the conversation replacements.
@@ -250,6 +255,7 @@ export function apply(ctx) {
   // same shape. The host serves read_browser only in those two (`browser` in the state).
   const bridge = (window.dshDesktop?.protocolVersion === 1 ? window.dshDesktop.browser : globalThis.dsBotApp?.browser) ?? null
   const browsers = bridge ? createBotBrowsers({ bridge, createSource }) : null
+  const webPage = browsers ? createWebPage({ browsers }) : null
   if (browsers) {
     ctx.effect(() => {
       let stopReads = null
@@ -260,7 +266,7 @@ export function apply(ctx) {
         if (on && !stopReads) stopReads = serveBrowserReads({ browsers, post: call })
         if (!on && stopReads) { stopReads(); stopReads = null }
         // A Bot deleted here or in another window takes its guests and saved tabs along.
-        void browsers.retain(snapshot.bots.map(bot => bot.id))
+        void browsers.retain([...snapshot.bots.map(bot => bot.id), WEB_SUBJECT])
         // A panel open on the browser view without a browsable subject falls back
         // to the details view.
         ui.set(state => (state.details && state.view === 'browser' && (!on || !snapshot.byId[state.details]) ? { ...state, view: 'details' } : state))
@@ -406,6 +412,7 @@ export function apply(ctx) {
     openSession: (id) => {
       // A DSH Agent Session id lands on the plain surface, not the Bot skin.
       if (isAgentSessionId(id)) return actions.openAgentSession(id)
+      actions.closeWebPage?.()
       ui.set(state => (state.newChat || state.exchange || state.menu || state.palette ? { ...state, newChat: null, exchange: null, menu: null, palette: null } : state))
       setPlain(false)
       const target = partFor(id)
@@ -414,6 +421,7 @@ export function apply(ctx) {
     // The conversation replacements withdraw for a plain Session; set the surface
     // before the navigation so the Bot skin never flashes.
     openAgentSession: (sessionId) => {
+      actions.closeWebPage?.()
       ui.set(state => ({ ...state, newChat: null, exchange: null, menu: null, palette: null, details: null, view: 'details', renaming: false, tab: null }))
       setPlain(true)
       show(sessionId)
@@ -545,6 +553,24 @@ export function apply(ctx) {
         browsers.activate(bot.id, tabId)
         ui.set(state => ({ ...state, details: id, view: 'browser' }))
       },
+      // The fixed entry above the Bot list: the page takes the main area, the right
+      // panel gets out of its way, and closing only hides the guest. Leaving is
+      // done by any row click (sidebar.js) or by opening a conversation.
+      openWebPage: () => {
+        const tabId = webPage.open()
+        ui.set(state => (state.details === null && state.view === 'details' ? state : { ...state, details: null, view: 'details', renaming: false, tab: null, side: null }))
+        webUi.set(state => (state.open ? state : { open: true }))
+        return tabId
+      },
+      closeWebPage: () => {
+        webUi.set(state => (state.open ? { open: false } : state))
+        webPage.hide()
+      },
+      webPageShow: (tabId, box) => webPage.show(tabId, box),
+      webPageCommand: (tabId, name) => webPage.command(tabId, name),
+      webPageFocus: tabId => browsers.focus(tabId),
+      webPageActivate: tabId => webPage.activate(tabId),
+      webPageExternal: tabId => webPage.openExternal(tabId),
       browserEnsure: botId => browsers.ensureTabs(botId),
       browserCloseTab: (botId, tabId) => browsers.closeTab(botId, tabId),
       browserActivate: (botId, tabId) => browsers.activate(botId, tabId),
@@ -627,7 +653,7 @@ export function apply(ctx) {
   const browserPages = browsers?.pages ?? createSource({})
   const browserTabs = browsers?.tabs ?? createSource({})
   const browserHolds = browsers?.holds ?? createSource({})
-  const face = () => ({ actions, hooks: { roster, ui, activity, work, memoryNews, registry, turnClock, live, cards, heldCards, browserPages, browserTabs, browserHolds, surface, update } })
+  const face = () => ({ actions, hooks: { roster, ui, web: webUi, activity, work, memoryNews, registry, turnClock, live, cards, heldCards, browserPages, browserTabs, browserHolds, surface, update } })
   ctx.effect(() => noticeApprovals({
     work,
     roster,
@@ -810,7 +836,9 @@ export function apply(ctx) {
     // The whale wins the seat over a shell account plugin's own launcher (the
     // Desktop's "··· More"), which comes back in Agent mode.
     () => shadow('settings.launcher', { priority: BOT_PRIORITY, inject: face }, AccountLauncher),
+    () => installCompiledStyles(WEB_PAGE_CSS, 'web-page'),
     () => shadow('shell.overlay', { id: 'bot', order: 50, inject: face }, Overlays),
+    () => shadow('shell.overlay', { id: 'bot-web-page', order: 52, inject: face }, WebPageDock),
     () => shadow('shell.overlay', { id: 'bot-signin', order: 55, inject: face }, DeepSeekSignIn),
     () => shadow('shell.overlay', { id: 'bot-toast', order: 60, inject: face }, ErrorToast),
   ]
