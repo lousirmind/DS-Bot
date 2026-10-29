@@ -19098,7 +19098,6 @@ function serveBrowserReads({ browsers, post, clientId = globalThis.crypto.random
 // src/client/web-page.js
 var WEB_SUBJECT = "web:deepseek";
 var WEB_HOME = "https://chat.deepseek.com/";
-var WEB_MAX_TABS = 4;
 function createWebPage({ browsers }) {
   const tabs = () => browsers.tabs.getSnapshot()[WEB_SUBJECT] ?? { ids: [], active: null };
   const pageOf = (tabId) => browsers.pages.getSnapshot()[tabId] ?? null;

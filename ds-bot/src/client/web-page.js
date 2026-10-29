@@ -11,8 +11,6 @@
 // need a different shape.
 export const WEB_SUBJECT = 'web:deepseek'
 export const WEB_HOME = 'https://chat.deepseek.com/'
-// A link asking for a new window opens a tab in this subject, like a Bot's browser.
-export const WEB_MAX_TABS = 4
 
 /**
  * @param {{ browsers: ReturnType<typeof import('./bot-browsers.js').createBotBrowsers> }} options
